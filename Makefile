@@ -352,17 +352,17 @@ catalog-push: ## Push a catalog image.
 helmchart: helmchart-clean kustomize helm
 	mkdir -p ./charts/${OPERATOR_NAME}/templates
 	mkdir -p ./charts/${OPERATOR_NAME}/crds
-	repo=${OPERATOR_NAME} envsubst < ./config/local-development/tilt/env-replace-image.yaml > ./config/local-development/tilt/replace-image.yaml
+	repo=${OPERATOR_NAME} sh -c 'sed "s/\$$repo/$$repo/g" ./config/local-development/tilt/env-replace-image.yaml > ./config/local-development/tilt/replace-image.yaml'
 	$(KUSTOMIZE) build ./config/helmchart -o ./charts/${OPERATOR_NAME}/templates
 	sed -i 's/release-namespace/{{.Release.Namespace}}/' ./charts/${OPERATOR_NAME}/templates/*.yaml
-	rm ./charts/${OPERATOR_NAME}/templates/apps_v1_deployment_${OPERATOR_NAME}-controller-manager.yaml
+	rm -f ./charts/${OPERATOR_NAME}/templates/apps_v1_deployment_*-controller-manager.yaml
 	mv ./charts/${OPERATOR_NAME}/templates/apiextensions.k8s.io_v1_customresourcedefinition* ./charts/${OPERATOR_NAME}/crds
 	cp ./config/helmchart/templates/* ./charts/${OPERATOR_NAME}/templates
-	version=${VERSION} envsubst < ./config/helmchart/Chart.yaml.tpl  > ./charts/${OPERATOR_NAME}/Chart.yaml
-	version=${VERSION} image_repo=$${IMG%:*} envsubst < ./config/helmchart/values.yaml.tpl  > ./charts/${OPERATOR_NAME}/values.yaml
-	sed -i '1s/^/{{- if .Values.enableMonitoring }}\n/' ./charts/${OPERATOR_NAME}/templates/monitoring.coreos.com_v1_servicemonitor_${OPERATOR_NAME}-controller-manager-metrics-monitor.yaml
-	echo {{- end }} >> ./charts/${OPERATOR_NAME}/templates/monitoring.coreos.com_v1_servicemonitor_${OPERATOR_NAME}-controller-manager-metrics-monitor.yaml
-	sed -i 's/name: vault-config-operator-certs/{{- if .Values.enableCertManager }}\n          name: vault-config-operator-metrics-service-cert\n          {{- else }}\n          name: vault-config-operator-certs\n          {{- end }}/' ./charts/${OPERATOR_NAME}/templates/monitoring.coreos.com_v1_servicemonitor_${OPERATOR_NAME}-controller-manager-metrics-monitor.yaml
+	version="${VERSION}" sh -c 'sed "s/\$${version}/$$version/g" ./config/helmchart/Chart.yaml.tpl > ./charts/${OPERATOR_NAME}/Chart.yaml'
+	version="${VERSION}" image_repo="$${IMG%:*}" sh -c 'sed "s/\$${version}/$$version/g; s|\$${image_repo}|$$image_repo|g" ./config/helmchart/values.yaml.tpl > ./charts/${OPERATOR_NAME}/values.yaml'
+	sed -i '1s/^/{{- if .Values.enableMonitoring }}\n/' ./charts/${OPERATOR_NAME}/templates/monitoring.coreos.com_v1_servicemonitor_*-controller-manager-metrics-monitor.yaml
+	echo {{- end }} >> ./charts/${OPERATOR_NAME}/templates/monitoring.coreos.com_v1_servicemonitor_*-controller-manager-metrics-monitor.yaml
+	sed -i 's/name: vault-config-operator-certs/{{- if .Values.enableCertManager }}\n          name: vault-config-operator-metrics-service-cert\n          {{- else }}\n          name: vault-config-operator-certs\n          {{- end }}/' ./charts/${OPERATOR_NAME}/templates/monitoring.coreos.com_v1_servicemonitor_*-controller-manager-metrics-monitor.yaml
 	$(HELM) lint ./charts/${OPERATOR_NAME}
 
 .PHONY: helmchart-repo
@@ -422,7 +422,8 @@ ifeq (,$(wildcard $(KUBECTL)))
 	echo "Downloading kubectl to ${KUBECTL}..." ;\
 	OS=$(shell go env GOOS) ;\
 	ARCH=$(shell go env GOARCH) ;\
-	curl --create-dirs -sSLo ${KUBECTL} https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/$${OS}/$${ARCH}/kubectl ;\
+	mkdir -p $(dir ${KUBECTL}) ;\
+	wget -q -O ${KUBECTL} https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/$${OS}/$${ARCH}/kubectl ;\
 	chmod +x ${KUBECTL} ;\
 	}
 endif
@@ -446,7 +447,8 @@ ifeq (,$(wildcard $(HELM)))
 	echo "Downloading helm to ${HELM}..."
 	OS=$(shell go env GOOS) ;\
 	ARCH=$(shell go env GOARCH) ;\
-	curl --create-dirs -sSLo ${HELM}.tar.gz https://get.helm.sh/helm-${HELM_VERSION}-$${OS}-$${ARCH}.tar.gz ;\
+	mkdir -p $(dir ${HELM}) ;\
+	wget -q -O ${HELM}.tar.gz https://get.helm.sh/helm-${HELM_VERSION}-$${OS}-$${ARCH}.tar.gz ;\
 	tar -xf ${HELM}.tar.gz -C $(LOCALBIN)/ ;\
 	mv ./bin/$${OS}-$${ARCH}/helm ${HELM}
 endif
